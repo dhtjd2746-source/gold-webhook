@@ -19,15 +19,16 @@ ALERT_CODES = {"DOUBLE_SHORT","SINGLE_SHORT","BREAKOUT_SHORT","REVERSAL_LONG",
                "DOUBLE_LONG","SINGLE_LONG","BREAKOUT_LONG","REVERSAL_SHORT"}
 _last_sent = {}
 
-def send_sms(text):
+def send_sms(text, to=None):
+    to = to or TO_NUMBER
     date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     salt = str(int(time.time()*1000))
     sig  = hmac.new(SOLAPI_SECRET.encode(), (date+salt).encode(), hashlib.sha256).hexdigest()
     headers = {"Authorization":f"HMAC-SHA256 apiKey={SOLAPI_KEY}, date={date}, salt={salt}, signature={sig}",
                "Content-Type":"application/json"}
-    body = {"message":{"to":TO_NUMBER,"from":FROM_NUMBER,"text":text}}
+    body = {"message":{"to":to,"from":FROM_NUMBER,"text":text}}
     res = requests.post("https://api.solapi.com/messages/v4/send", headers=headers, json=body, timeout=10)
-    print("SMS:", res.status_code, text[:40])
+    print("SMS:", res.status_code, to, text[:40])
 
 def get_signal(price, bb20u, bb20l, bb4u, bb4l, direction, margin=4,
                cur_high=None, cur_low=None, bb4_reliable=True):
@@ -106,6 +107,28 @@ def analyze_and_sms(ticker):
     text = f"[{display}] {time_str}\n{pfmt} | {ma_txt}\n{sig_name}\n{sl_tp}\n▶ {cmd}"
     send_sms(text)
     _last_sent[key] = now
+
+def _cors(resp):
+    resp.headers["Access-Control-Allow-Origin"]  = "*"
+    resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return resp
+
+@app.route("/lms/sms", methods=["POST", "OPTIONS"])
+def lms_sms():
+    if request.method == "OPTIONS":
+        return _cors(app.make_default_options_response())
+    try:
+        data = request.get_json(force=True) or {}
+        to   = str(data.get("to","")).strip().replace("-","").replace(" ","")
+        text = str(data.get("text","")).strip()
+        if not to or not text or len(to) < 10:
+            return _cors(app.make_response(("missing params", 400)))
+        send_sms(text, to=to)
+        return _cors(app.make_response(("OK", 200)))
+    except Exception as e:
+        print("lms_sms 오류:", e)
+        return _cors(app.make_response(("ERROR", 500)))
 
 @app.route("/")
 @app.route("/ping")
