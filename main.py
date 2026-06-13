@@ -124,10 +124,7 @@ def upload_image_to_solapi(image_bytes):
     print(f"Solapi upload 시도: {len(image_bytes)} bytes")
     res = requests.post("https://api.solapi.com/storage/v1/files",
         headers=_solapi_auth(),
-        files={
-            "file": ("image.jpg", image_bytes, "image/jpeg"),
-            "type": (None, "MMS"),
-        },
+        files={"file": ("image.jpg", image_bytes, "image/jpeg")},
         timeout=30)
     print("Solapi upload:", res.status_code, res.text[:400])
     if res.status_code != 200:
