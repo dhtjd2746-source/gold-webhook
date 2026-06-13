@@ -1,4 +1,4 @@
-import os, hmac, hashlib, time, json, math, requests
+import os, hmac, hashlib, time, json, math, base64, requests
 from flask import Flask, request
 from datetime import datetime, timezone, timedelta
 from tradingview_ta import TA_Handler, Interval as TVInterval
@@ -113,6 +113,50 @@ def _cors(resp):
     resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
     resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return resp
+
+def _solapi_auth():
+    date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    salt = str(int(time.time()*1000))
+    sig  = hmac.new(SOLAPI_SECRET.encode(), (date+salt).encode(), hashlib.sha256).hexdigest()
+    return {"Authorization": f"HMAC-SHA256 apiKey={SOLAPI_KEY}, date={date}, salt={salt}, signature={sig}"}
+
+def upload_image_to_solapi(image_bytes):
+    res = requests.post("https://api.solapi.com/storage/v1/files",
+        headers=_solapi_auth(),
+        files={"file": ("preview.jpg", image_bytes, "image/jpeg")},
+        data={"type": "MMS"},
+        timeout=30)
+    data = res.json()
+    print("Solapi upload:", res.status_code, data.get("fileId",""))
+    return data.get("fileId")
+
+def send_mms(to, image_id, text=""):
+    headers = {**_solapi_auth(), "Content-Type": "application/json"}
+    body = {"message": {"to": to, "from": FROM_NUMBER, "type": "MMS", "imageId": image_id, "text": text}}
+    res = requests.post("https://api.solapi.com/messages/v4/send", headers=headers, json=body, timeout=10)
+    print("MMS:", res.status_code, to)
+
+@app.route("/lms/mms", methods=["POST", "OPTIONS"])
+def lms_mms_image():
+    if request.method == "OPTIONS":
+        return _cors(app.make_default_options_response())
+    try:
+        data     = request.get_json(force=True) or {}
+        to       = str(data.get("to","")).strip().replace("-","").replace(" ","")
+        text     = str(data.get("text","")).strip()
+        img_b64  = str(data.get("imageData",""))
+        if not to or not img_b64 or len(to) < 10:
+            return _cors(app.make_response(("missing params", 400)))
+        raw = img_b64.split(",")[-1]
+        image_bytes = base64.b64decode(raw)
+        file_id = upload_image_to_solapi(image_bytes)
+        if not file_id:
+            return _cors(app.make_response(("upload failed", 500)))
+        send_mms(to=to, image_id=file_id, text=text)
+        return _cors(app.make_response(("OK", 200)))
+    except Exception as e:
+        print("lms_mms 오류:", e)
+        return _cors(app.make_response(("ERROR", 500)))
 
 @app.route("/lms/sms", methods=["POST", "OPTIONS"])
 def lms_sms():
