@@ -121,14 +121,17 @@ def _solapi_auth():
     return {"Authorization": f"HMAC-SHA256 apiKey={SOLAPI_KEY}, date={date}, salt={salt}, signature={sig}"}
 
 def upload_image_to_solapi(image_bytes):
+    print(f"Solapi upload 시도: {len(image_bytes)} bytes")
     res = requests.post("https://api.solapi.com/storage/v1/files",
         headers=_solapi_auth(),
-        files={"file": ("preview.jpg", image_bytes, "image/jpeg")},
+        files={"file": ("image.jpg", image_bytes, "image/jpeg")},
         data={"type": "MMS"},
         timeout=30)
+    print("Solapi upload:", res.status_code, res.text[:400])
+    if res.status_code != 200:
+        return None
     data = res.json()
-    print("Solapi upload:", res.status_code, data.get("fileId",""))
-    return data.get("fileId")
+    return data.get("fileId") or data.get("imageId")
 
 def send_mms(to, image_id, text=""):
     headers = {**_solapi_auth(), "Content-Type": "application/json"}
