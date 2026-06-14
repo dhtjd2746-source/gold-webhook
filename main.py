@@ -123,26 +123,21 @@ def _solapi_auth():
 def upload_image_to_solapi(image_bytes):
     print(f"Solapi upload 시도: {len(image_bytes)} bytes")
     try:
-        boundary = "Boundary" + uuid.uuid4().hex
-        body = (
-            f"--{boundary}\r\n"
-            f'Content-Disposition: form-data; name="file"; filename="image.jpg"\r\n'
-            f"Content-Type: image/jpeg\r\n\r\n"
-        ).encode("utf-8") + image_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
         auth = _solapi_auth()
-        headers = {
-            **auth,
-            "Content-Type": f"multipart/form-data; boundary={boundary}",
-            "Content-Length": str(len(body)),
-        }
-        conn = http.client.HTTPSConnection("api.solapi.com", timeout=30)
-        conn.request("POST", "/storage/v1/files", body=body, headers=headers)
-        res = conn.getresponse()
-        text = res.read().decode("utf-8")
-        print("Solapi upload:", res.status, text[:400])
-        if res.status != 200:
+        # Content-Type은 requests가 자동으로 boundary 포함해서 설정 — 직접 지정 금지
+        files = {"file": ("image.jpg", image_bytes, "image/jpeg")}
+        data  = {"fileType": "MMS"}
+        res = requests.post(
+            "https://api.solapi.com/storage/v1/files",
+            headers=auth,
+            files=files,
+            data=data,
+            timeout=30,
+        )
+        print("Solapi upload:", res.status_code, res.text[:400])
+        if res.status_code != 200:
             return None
-        return json.loads(text).get("fileId")
+        return res.json().get("fileId")
     except Exception as e:
         print("Solapi upload 오류:", e)
         return None
