@@ -158,8 +158,10 @@ def send_mms(to, image_id, text=""):
             headers=headers, json=body, timeout=15
         )
         print("MMS:", to, res.status_code, res.text[:200])
+        return res.status_code == 200
     except Exception as e:
         print("MMS 오류:", e)
+        return False
 
 @app.route("/lms/mms", methods=["POST", "OPTIONS"])
 def lms_mms_image():
@@ -177,7 +179,9 @@ def lms_mms_image():
         file_id = upload_image_to_solapi(image_bytes)
         if not file_id:
             return _cors(app.make_response(("upload failed", 500)))
-        send_mms(to=to, image_id=file_id, text=text)
+        ok = send_mms(to=to, image_id=file_id, text=text)
+        if not ok:
+            return _cors(app.make_response(("send failed", 500)))
         return _cors(app.make_response(("OK", 200)))
     except Exception as e:
         print("lms_mms 오류:", e)
