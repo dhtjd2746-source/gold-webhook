@@ -1,4 +1,4 @@
-import os, hmac, hashlib, time, json, math, base64, requests
+import os, hmac, hashlib, time, json, math, base64, uuid, http.client, requests
 from flask import Flask, request
 from datetime import datetime, timezone, timedelta
 from tradingview_ta import TA_Handler, Interval as TVInterval
@@ -122,29 +122,49 @@ def _solapi_auth():
 
 def upload_image_to_solapi(image_bytes):
     print(f"Solapi upload 시도: {len(image_bytes)} bytes")
-    import io
-    from solapi import SolapiMessageService
     try:
-        svc = SolapiMessageService(api_key=SOLAPI_KEY, api_secret=SOLAPI_SECRET)
-        result = svc.file_upload(io.BytesIO(image_bytes), "MMS")
-        print("Solapi upload 결과:", result)
-        return result.get("fileId")
+        boundary = "Boundary" + uuid.uuid4().hex
+        body = (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="file"; filename="image.jpg"\r\n'
+            f"Content-Type: image/jpeg\r\n\r\n"
+        ).encode("utf-8") + image_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
+        auth = _solapi_auth()
+        headers = {
+            **auth,
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Content-Length": str(len(body)),
+        }
+        conn = http.client.HTTPSConnection("api.solapi.com", timeout=30)
+        conn.request("POST", "/storage/v1/files", body=body, headers=headers)
+        res = conn.getresponse()
+        text = res.read().decode("utf-8")
+        print("Solapi upload:", res.status, text[:400])
+        if res.status != 200:
+            return None
+        return json.loads(text).get("fileId")
     except Exception as e:
         print("Solapi upload 오류:", e)
         return None
 
 def send_mms(to, image_id, text=""):
     try:
-        from solapi import SolapiMessageService
-        svc = SolapiMessageService(api_key=SOLAPI_KEY, api_secret=SOLAPI_SECRET)
-        result = svc.send({
-            "to": to,
-            "from": FROM_NUMBER,
-            "type": "MMS",
-            "imageId": image_id,
-            "text": text,
-        })
-        print("MMS:", to, result)
+        auth = _solapi_auth()
+        headers = {**auth, "Content-Type": "application/json"}
+        body = {
+            "message": {
+                "to": to,
+                "from": FROM_NUMBER,
+                "type": "MMS",
+                "imageId": image_id,
+                "text": text or " ",
+            }
+        }
+        res = requests.post(
+            "https://api.solapi.com/messages/v4/send",
+            headers=headers, json=body, timeout=15
+        )
+        print("MMS:", to, res.status_code, res.text[:200])
     except Exception as e:
         print("MMS 오류:", e)
 

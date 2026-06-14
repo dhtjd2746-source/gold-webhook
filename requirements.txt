@@ -2,4 +2,3 @@ flask
 requests
 gunicorn
 tradingview-ta
-solapi
