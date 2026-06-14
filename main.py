@@ -125,11 +125,11 @@ def upload_image_to_solapi(image_bytes):
     try:
         auth = _solapi_auth()
         b64 = base64.b64encode(image_bytes).decode("utf-8")
-        # Solapi /storage/v1/files 는 JSON + data URL 형식을 사용
+        # Solapi: JSON body, "file"=순수base64, "type"="MMS"
         res = requests.post(
             "https://api.solapi.com/storage/v1/files",
             headers={**auth, "Content-Type": "application/json"},
-            json={"file": f"data:image/jpeg;base64,{b64}", "fileType": "MMS"},
+            json={"file": b64, "type": "MMS"},
             timeout=30,
         )
         print("Solapi upload:", res.status_code, res.text[:400])
