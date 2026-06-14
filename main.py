@@ -150,7 +150,7 @@ def send_mms(to, image_id, text=""):
                 "from": FROM_NUMBER,
                 "type": "MMS",
                 "imageId": image_id,
-                "text": text or " ",
+                "text": text.strip() if text and text.strip() else "최오성수학연구소\nhttps://osung-f589f.web.app",
             }
         }
         res = requests.post(
