@@ -124,14 +124,12 @@ def upload_image_to_solapi(image_bytes):
     print(f"Solapi upload 시도: {len(image_bytes)} bytes")
     try:
         auth = _solapi_auth()
-        # Content-Type은 requests가 자동으로 boundary 포함해서 설정 — 직접 지정 금지
-        files = {"file": ("image.jpg", image_bytes, "image/jpeg")}
-        data  = {"fileType": "MMS"}
+        b64 = base64.b64encode(image_bytes).decode("utf-8")
+        # Solapi /storage/v1/files 는 JSON + data URL 형식을 사용
         res = requests.post(
             "https://api.solapi.com/storage/v1/files",
-            headers=auth,
-            files=files,
-            data=data,
+            headers={**auth, "Content-Type": "application/json"},
+            json={"file": f"data:image/jpeg;base64,{b64}", "fileType": "MMS"},
             timeout=30,
         )
         print("Solapi upload:", res.status_code, res.text[:400])
