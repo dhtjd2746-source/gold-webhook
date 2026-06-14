@@ -183,6 +183,22 @@ def lms_mms_image():
         print("lms_mms 오류:", e)
         return _cors(app.make_response(("ERROR", 500)))
 
+@app.route("/lms/notify-question", methods=["POST", "OPTIONS"])
+def lms_notify_question():
+    if request.method == "OPTIONS":
+        return _cors(app.make_default_options_response())
+    try:
+        data = request.get_json(force=True) or {}
+        student = str(data.get("studentName", "")).strip()
+        preview = str(data.get("preview", "")).strip()
+        short = preview[:40] + ("..." if len(preview) > 40 else "")
+        text = f"[포스코수학] 새 질문\n학생: {student}\n{short}\n\nhttps://osung-f589f.web.app/admin.html"
+        send_sms(text, to=TO_NUMBER)
+        return _cors(app.make_response(("OK", 200)))
+    except Exception as e:
+        print("notify-question 오류:", e)
+        return _cors(app.make_response(("ERROR", 500)))
+
 @app.route("/lms/sms", methods=["POST", "OPTIONS"])
 def lms_sms():
     if request.method == "OPTIONS":
